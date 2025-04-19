@@ -19,6 +19,8 @@
 #include "src/utils/palette.h"
 #include "src/webp/encode.h"
 
+#include "esp_heap_caps.h"
+
 // If PRINT_MEM_INFO is defined, extra info (like total memory used, number of
 // alloc/free etc) is printed. For debugging/tuning purpose only (it's slow,
 // and not multi-thread safe!).
@@ -196,7 +198,7 @@ void* WebPSafeMalloc(uint64_t nmemb, size_t size) {
   Increment(&num_malloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
-  ptr = malloc((size_t)(nmemb * size));
+  ptr = heap_caps_malloc((size_t)(nmemb * size), MALLOC_CAP_SPIRAM);
   AddMem(ptr, (size_t)(nmemb * size));
   return ptr;
 }
@@ -206,7 +208,7 @@ void* WebPSafeCalloc(uint64_t nmemb, size_t size) {
   Increment(&num_calloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
-  ptr = calloc((size_t)nmemb, size);
+  ptr = heap_caps_calloc((size_t)nmemb, size, MALLOC_CAP_SPIRAM);
   AddMem(ptr, (size_t)(nmemb * size));
   return ptr;
 }
