@@ -12,6 +12,8 @@
 #ifndef WEBP_IMAGEIO_PNMDEC_H_
 #define WEBP_IMAGEIO_PNMDEC_H_
 
+#include <stddef.h>
+
 #include "webp/types.h"
 
 #ifdef __cplusplus
@@ -31,7 +33,7 @@ int ReadPNM(const uint8_t* const data, size_t data_size,
             struct Metadata* const metadata);
 
 #ifdef __cplusplus
-}    // extern "C"
+}  // extern "C"
 #endif
 
 #endif  // WEBP_IMAGEIO_PNMDEC_H_

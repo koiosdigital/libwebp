@@ -13,6 +13,8 @@
 #ifndef WEBP_IMAGEIO_METADATA_H_
 #define WEBP_IMAGEIO_METADATA_H_
 
+#include <stddef.h>
+
 #include "webp/types.h"
 
 #ifdef __cplusplus
@@ -41,7 +43,7 @@ int MetadataCopy(const char* metadata, size_t metadata_len,
                  MetadataPayload* const payload);
 
 #ifdef __cplusplus
-}    // extern "C"
+}  // extern "C"
 #endif
 
 #endif  // WEBP_IMAGEIO_METADATA_H_

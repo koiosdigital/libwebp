@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "extras/extras.h"
-#include "imageio/imageio_util.h"
 #include "../examples/unicode.h"
+#include "./extras.h"
+#include "imageio/imageio_util.h"
+#include "webp/types.h"
 
 // Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
 int main(int argc, const char* argv[]) {
@@ -45,7 +46,7 @@ int main(int argc, const char* argv[]) {
         if (!quiet) {
           printf("Estimated quality factor: %d\n", q);
         } else {
-          printf("%d\n", q);   // just print the number
+          printf("%d\n", q);  // just print the number
         }
       }
       free((void*)data);

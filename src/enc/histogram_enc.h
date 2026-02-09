@@ -24,34 +24,36 @@ extern "C" {
 #endif
 
 // Not a trivial literal symbol.
-#define VP8L_NON_TRIVIAL_SYM (0xffffffff)
+#define VP8L_NON_TRIVIAL_SYM ((uint16_t)(0xffff))
 
 // A simple container for histograms of data.
 typedef struct {
   // 'literal' contains green literal, palette-code and
   // copy-length-prefix histogram
-  uint32_t* literal;        // Pointer to the allocated buffer for literal.
+  uint32_t* literal;  // Pointer to the allocated buffer for literal.
   uint32_t red[NUM_LITERAL_CODES];
   uint32_t blue[NUM_LITERAL_CODES];
   uint32_t alpha[NUM_LITERAL_CODES];
   // Backward reference prefix-code histogram.
   uint32_t distance[NUM_DISTANCE_CODES];
   int palette_code_bits;
-  uint32_t trivial_symbol;  // True, if histograms for Red, Blue & Alpha
-                            // literal symbols are single valued.
-  uint64_t bit_cost;        // cached value of bit cost.
-  uint64_t literal_cost;    // Cached values of dominant entropy costs:
-  uint64_t red_cost;        // literal, red & blue.
-  uint64_t blue_cost;
-  uint8_t is_used[5];       // 5 for literal, red, blue, alpha, distance
-  uint16_t bin_id;          // entropy bin index.
+  // The following members are only used within VP8LGetHistoImageSymbols.
+
+  // Index of the unique value of a histogram if any, VP8L_NON_TRIVIAL_SYM
+  // otherwise.
+  uint16_t trivial_symbol[5];
+  uint64_t bit_cost;  // Cached value of total bit cost.
+  // Cached values of entropy costs: literal, red, blue, alpha, distance
+  uint64_t costs[5];
+  uint8_t is_used[5];  // 5 for literal, red, blue, alpha, distance
+  uint16_t bin_id;     // entropy bin index.
 } VP8LHistogram;
 
 // Collection of histograms with fixed capacity, allocated as one
 // big memory chunk. Can be destroyed by calling WebPSafeFree().
 typedef struct {
-  int size;         // number of slots currently in use
-  int max_size;     // maximum capacity
+  int size;      // number of slots currently in use
+  int max_size;  // maximum capacity
   VP8LHistogram** histograms;
 } VP8LHistogramSet;
 
@@ -60,13 +62,13 @@ typedef struct {
 // The input data is the PixOrCopy data, which models the literals, stop
 // codes and backward references (both distances and lengths).  Also: if
 // palette_code_bits is >= 0, initialize the histogram with this value.
-void VP8LHistogramCreate(VP8LHistogram* const p,
+void VP8LHistogramCreate(VP8LHistogram* const h,
                          const VP8LBackwardRefs* const refs,
                          int palette_code_bits);
 
 // Set the palette_code_bits and reset the stats.
 // If init_arrays is true, the arrays are also filled with 0's.
-void VP8LHistogramInit(VP8LHistogram* const p, int palette_code_bits,
+void VP8LHistogramInit(VP8LHistogram* const h, int palette_code_bits,
                        int init_arrays);
 
 // Collect all the references into a histogram (without reset)
@@ -97,7 +99,7 @@ VP8LHistogram* VP8LAllocateHistogram(int cache_bits);
 
 static WEBP_INLINE int VP8LHistogramNumCodes(int palette_code_bits) {
   return NUM_LITERAL_CODES + NUM_LENGTH_CODES +
-      ((palette_code_bits > 0) ? (1 << palette_code_bits) : 0);
+         ((palette_code_bits > 0) ? (1 << palette_code_bits) : 0);
 }
 
 // Builds the histogram image. pic and percent are for progress.
@@ -116,7 +118,7 @@ uint64_t VP8LBitsEntropy(const uint32_t* const array, int n);
 
 // Estimate how many bits the combined entropy of literals and distance
 // approximately maps to.
-uint64_t VP8LHistogramEstimateBits(VP8LHistogram* const p);
+uint64_t VP8LHistogramEstimateBits(const VP8LHistogram* const h);
 
 #ifdef __cplusplus
 }

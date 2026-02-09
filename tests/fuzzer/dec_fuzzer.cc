@@ -16,19 +16,28 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string_view>
 
-#include "src/webp/decode.h"
+#include "./nalloc.h"
 #include "tests/fuzzer/fuzz_utils.h"
+#include "webp/decode.h"
 
 namespace {
 
-void DecodeWebP(std::string_view arbitrary_bytes) {
+void DecodeWebP(std::string_view arbitrary_bytes,
+                const fuzz_utils::WebPDecoderOptionsCpp& decoder_options) {
   WebPDecoderConfig decoder_config;
   if (!WebPInitDecoderConfig(&decoder_config)) {
     fprintf(stderr, "WebPInitDecoderConfig failed.\n");
-    abort();
+    std::abort();
   }
+  nalloc_init(nullptr);
+  nalloc_start(reinterpret_cast<const uint8_t*>(arbitrary_bytes.data()),
+               arbitrary_bytes.size());
+  std::memcpy(&decoder_config.options, &decoder_options,
+              sizeof(decoder_options));
   const VP8StatusCode status =
       WebPDecode(reinterpret_cast<const uint8_t*>(arbitrary_bytes.data()),
                  arbitrary_bytes.size(), &decoder_config);
@@ -36,13 +45,14 @@ void DecodeWebP(std::string_view arbitrary_bytes) {
   // The decoding may fail (because the fuzzed input can be anything) but not
   // for these reasons.
   if (status == VP8_STATUS_SUSPENDED || status == VP8_STATUS_USER_ABORT) {
-    abort();
+    std::abort();
   }
+  nalloc_end();
 }
 
 FUZZ_TEST(WebPSuite, DecodeWebP)
-    .WithDomains(
-        fuzztest::String()
-            .WithMaxSize(fuzz_utils::kMaxWebPFileSize + 1));
+    .WithDomains(fuzztest::String().WithMaxSize(fuzz_utils::kMaxWebPFileSize +
+                                                1),
+                 fuzz_utils::ArbitraryValidWebPDecoderOptions());
 
 }  // namespace

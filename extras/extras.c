@@ -10,21 +10,22 @@
 //  Additional WebP utilities.
 //
 
-#include "extras/extras.h"
+#include "./extras.h"
 
 #include <assert.h>
 #include <limits.h>
 #include <string.h>
 
-#include "extras/sharpyuv_risk_table.h"
+#include "./sharpyuv_risk_table.h"
 #include "sharpyuv/sharpyuv.h"
 #include "src/dsp/dsp.h"
 #include "src/utils/utils.h"
+#include "webp/encode.h"
 #include "webp/format_constants.h"
 #include "webp/types.h"
 
 #define XTRA_MAJ_VERSION 1
-#define XTRA_MIN_VERSION 5
+#define XTRA_MIN_VERSION 6
 #define XTRA_REV_VERSION 0
 
 //------------------------------------------------------------------------------
@@ -44,7 +45,7 @@ int WebPImportGray(const uint8_t* gray_data, WebPPicture* pic) {
   uv_width = (width + 1) >> 1;
   for (y = 0; y < pic->height; ++y) {
     memcpy(pic->y + y * pic->y_stride, gray_data, width);
-    gray_data += width;    // <- we could use some 'data_stride' here if needed
+    gray_data += width;  // <- we could use some 'data_stride' here if needed
     if ((y & 1) == 0) {
       memset(pic->u + (y >> 1) * pic->uv_stride, 128, uv_width);
       memset(pic->v + (y >> 1) * pic->uv_stride, 128, uv_width);

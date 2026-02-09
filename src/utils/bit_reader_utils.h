@@ -16,15 +16,20 @@
 #define WEBP_UTILS_BIT_READER_UTILS_H_
 
 #include <assert.h>
+#include <stddef.h>
+
 #ifdef _MSC_VER
 #include <stdlib.h>  // _byteswap_ulong
 #endif
 #include "src/dsp/cpu.h"
+#include "src/utils/bounds_safety.h"
 #include "src/webp/types.h"
+
+WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
 
 // Warning! This macro triggers quite some MACRO wizardry around func signature!
 #if !defined(BITTRACE)
-#define BITTRACE 0    // 0 = off, 1 = print bits, 2 = print bytes
+#define BITTRACE 0  // 0 = off, 1 = print bits, 2 = print bytes
 #endif
 
 #if (BITTRACE > 0)
@@ -59,19 +64,19 @@ extern "C" {
 // BITS can be any multiple of 8 from 8 to 56 (inclusive).
 // Pick values that fit natural register size.
 
-#if defined(__i386__) || defined(_M_IX86)      // x86 32bit
+#if defined(__i386__) || defined(_M_IX86)  // x86 32bit
 #define BITS 24
-#elif defined(__x86_64__) || defined(_M_X64)   // x86 64bit
+#elif defined(__x86_64__) || defined(_M_X64)  // x86 64bit
 #define BITS 56
-#elif defined(__arm__) || defined(_M_ARM)      // ARM
+#elif defined(__arm__) || defined(_M_ARM)  // ARM
 #define BITS 24
-#elif WEBP_AARCH64                             // ARM 64bit
+#elif WEBP_AARCH64  // ARM 64bit
 #define BITS 56
-#elif defined(__mips__)                        // MIPS
+#elif defined(__mips__)  // MIPS
 #define BITS 24
-#elif defined(__wasm__)                        // WASM
+#elif defined(__wasm__)  // WASM
 #define BITS 56
-#else                                          // reasonable default
+#else  // reasonable default
 #define BITS 24
 #endif
 
@@ -94,22 +99,25 @@ typedef uint32_t range_t;
 typedef struct VP8BitReader VP8BitReader;
 struct VP8BitReader {
   // boolean decoder  (keep the field ordering as is!)
-  bit_t value;               // current value
-  range_t range;             // current range minus 1. In [127, 254] interval.
-  int bits;                  // number of valid bits left
+  bit_t value;    // current value
+  range_t range;  // current range minus 1. In [127, 254] interval.
+  int bits;       // number of valid bits left
   // read buffer
-  const uint8_t* buf;        // next byte to be read
-  const uint8_t* buf_end;    // end of read buffer
-  const uint8_t* buf_max;    // max packed-read position on buffer
-  int eof;                   // true if input is exhausted
+  const uint8_t* WEBP_ENDED_BY(buf_end) buf;  // next byte to be read
+  const uint8_t* buf_end;                     // end of read buffer
+  // max packed-read position on buffer
+  const uint8_t* WEBP_UNSAFE_INDEXABLE buf_max;
+  int eof;  // true if input is exhausted
 };
 
 // Initialize the bit reader and the boolean decoder.
 void VP8InitBitReader(VP8BitReader* const br,
-                      const uint8_t* const start, size_t size);
+                      const uint8_t* const WEBP_COUNTED_BY(size) start,
+                      size_t size);
 // Sets the working read buffer.
 void VP8BitReaderSetBuffer(VP8BitReader* const br,
-                           const uint8_t* const start, size_t size);
+                           const uint8_t* const WEBP_COUNTED_BY(size) start,
+                           size_t size);
 
 // Update internal pointers to displace the byte buffer by the
 // relative offset 'offset'.
@@ -141,21 +149,22 @@ int32_t VP8GetSignedValue(VP8BitReader* const br, int num_bits,
 typedef uint64_t vp8l_val_t;  // right now, this bit-reader can only use 64bit.
 
 typedef struct {
-  vp8l_val_t     val;        // pre-fetched bits
-  const uint8_t* buf;        // input byte buffer
-  size_t         len;        // buffer length
-  size_t         pos;        // byte position in buf
-  int            bit_pos;    // current bit-reading position in val
-  int            eos;        // true if a bit was read past the end of buffer
+  vp8l_val_t val;                           // pre-fetched bits
+  const uint8_t* WEBP_COUNTED_BY(len) buf;  // input byte buffer
+  size_t len;                               // buffer length
+  size_t pos;                               // byte position in buf
+  int bit_pos;  // current bit-reading position in val
+  int eos;      // true if a bit was read past the end of buffer
 } VP8LBitReader;
 
 void VP8LInitBitReader(VP8LBitReader* const br,
-                       const uint8_t* const start,
+                       const uint8_t* const WEBP_COUNTED_BY(length) start,
                        size_t length);
 
 //  Sets a new data buffer.
 void VP8LBitReaderSetBuffer(VP8LBitReader* const br,
-                            const uint8_t* const buffer, size_t length);
+                            const uint8_t* const WEBP_COUNTED_BY(length) buffer,
+                            size_t length);
 
 // Reads the specified number of bits from read buffer.
 // Flags an error in case end_of_stream or n_bits is more than the allowed limit
@@ -191,7 +200,7 @@ static WEBP_INLINE void VP8LFillBitWindow(VP8LBitReader* const br) {
 }
 
 #ifdef __cplusplus
-}    // extern "C"
+}  // extern "C"
 #endif
 
 #endif  // WEBP_UTILS_BIT_READER_UTILS_H_

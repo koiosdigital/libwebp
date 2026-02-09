@@ -16,10 +16,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string_view>
 
 #include "./fuzz_utils.h"
-#include "src/webp/decode.h"
+#include "webp/decode.h"
+#include "webp/types.h"
 
 namespace {
 
@@ -97,6 +99,5 @@ void SimpleApiTest(std::string_view data_in) {
 }  // namespace
 
 FUZZ_TEST(SimpleApi, SimpleApiTest)
-    .WithDomains(
-        fuzztest::String()
-            .WithMaxSize(fuzz_utils::kMaxWebPFileSize + 1));
+    .WithDomains(fuzztest::String().WithMaxSize(fuzz_utils::kMaxWebPFileSize +
+                                                1));

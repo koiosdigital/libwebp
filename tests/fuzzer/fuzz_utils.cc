@@ -21,8 +21,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <fstream>
-#include <iostream>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -32,15 +30,15 @@
 #include "./img_grid.h"
 #include "./img_peak.h"
 #include "src/dsp/cpu.h"
-#include "src/webp/decode.h"
-#include "src/webp/encode.h"
-#include "src/webp/types.h"
+#include "webp/decode.h"
+#include "webp/encode.h"
+#include "webp/types.h"
 
 namespace fuzz_utils {
 
 WebPPicture GetSourcePicture(int image_index, bool use_argb) {
   WebPPicture pic;
-  if (!WebPPictureInit(&pic)) abort();
+  if (!WebPPictureInit(&pic)) std::abort();
   pic.use_argb = use_argb;
 
   // Pick a source picture.
@@ -52,7 +50,7 @@ WebPPicture GetSourcePicture(int image_index, bool use_argb) {
   pic.argb_stride = pic.width * 4 * sizeof(uint8_t);
 
   // Read the bytes.
-  if (!WebPPictureImportRGBA(&pic, image_data, pic.argb_stride)) abort();
+  if (!WebPPictureImportRGBA(&pic, image_data, pic.argb_stride)) std::abort();
   return pic;
 }
 

@@ -15,40 +15,43 @@
 #define WEBP_UTILS_HUFFMAN_UTILS_H_
 
 #include <assert.h>
+
+#include "src/utils/bounds_safety.h"
 #include "src/webp/format_constants.h"
 #include "src/webp/types.h"
+
+WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define HUFFMAN_TABLE_BITS      8
-#define HUFFMAN_TABLE_MASK      ((1 << HUFFMAN_TABLE_BITS) - 1)
+#define HUFFMAN_TABLE_BITS 8
+#define HUFFMAN_TABLE_MASK ((1 << HUFFMAN_TABLE_BITS) - 1)
 
-#define LENGTHS_TABLE_BITS      7
-#define LENGTHS_TABLE_MASK      ((1 << LENGTHS_TABLE_BITS) - 1)
-
+#define LENGTHS_TABLE_BITS 7
+#define LENGTHS_TABLE_MASK ((1 << LENGTHS_TABLE_BITS) - 1)
 
 // Huffman lookup table entry
 typedef struct {
-  uint8_t bits;     // number of bits used for this symbol
-  uint16_t value;   // symbol value or table offset
+  uint8_t bits;    // number of bits used for this symbol
+  uint16_t value;  // symbol value or table offset
 } HuffmanCode;
 
 // long version for holding 32b values
 typedef struct {
-  int bits;         // number of bits used for this symbol,
-                    // or an impossible value if not a literal code.
-  uint32_t value;   // 32b packed ARGB value if literal,
-                    // or non-literal symbol otherwise
+  int bits;        // number of bits used for this symbol,
+                   // or an impossible value if not a literal code.
+  uint32_t value;  // 32b packed ARGB value if literal,
+                   // or non-literal symbol otherwise
 } HuffmanCode32;
 
 // Contiguous memory segment of HuffmanCodes.
 typedef struct HuffmanTablesSegment {
-  HuffmanCode* start;
+  HuffmanCode* WEBP_COUNTED_BY_OR_NULL(size) start;
   // Pointer to where we are writing into the segment. Starts at 'start' and
   // cannot go beyond 'start' + 'size'.
-  HuffmanCode* curr_table;
+  HuffmanCode* WEBP_UNSAFE_INDEXABLE curr_table;
   // Pointer to the next segment in the chain.
   struct HuffmanTablesSegment* next;
   int size;
@@ -80,13 +83,13 @@ void VP8LHuffmanTablesDeallocate(HuffmanTables* const huffman_tables);
 typedef struct HTreeGroup HTreeGroup;
 struct HTreeGroup {
   HuffmanCode* htrees[HUFFMAN_CODES_PER_META_CODE];
-  int      is_trivial_literal;  // True, if huffman trees for Red, Blue & Alpha
-                                // Symbols are trivial (have a single code).
-  uint32_t literal_arb;         // If is_trivial_literal is true, this is the
-                                // ARGB value of the pixel, with Green channel
-                                // being set to zero.
-  int is_trivial_code;          // true if is_trivial_literal with only one code
-  int use_packed_table;         // use packed table below for short literal code
+  int is_trivial_literal;  // True, if huffman trees for Red, Blue & Alpha
+                           // Symbols are trivial (have a single code).
+  uint32_t literal_arb;    // If is_trivial_literal is true, this is the
+                           // ARGB value of the pixel, with Green channel
+                           // being set to zero.
+  int is_trivial_code;     // true if is_trivial_literal with only one code
+  int use_packed_table;    // use packed table below for short literal code
   // table mapping input bits to a packed values, or escape case to literal code
   HuffmanCode32 packed_table[HUFFMAN_PACKED_TABLE_SIZE];
 };
@@ -102,13 +105,13 @@ void VP8LHtreeGroupsFree(HTreeGroup* const htree_groups);
 // the huffman table.
 // Returns built table size or 0 in case of error (invalid tree or
 // memory error).
-WEBP_NODISCARD int VP8LBuildHuffmanTable(HuffmanTables* const root_table,
-                                         int root_bits,
-                                         const int code_lengths[],
-                                         int code_lengths_size);
+WEBP_NODISCARD int VP8LBuildHuffmanTable(
+    HuffmanTables* const root_table, int root_bits,
+    const int WEBP_COUNTED_BY(code_lengths_size) code_lengths[],
+    int code_lengths_size);
 
 #ifdef __cplusplus
-}    // extern "C"
+}  // extern "C"
 #endif
 
 #endif  // WEBP_UTILS_HUFFMAN_UTILS_H_

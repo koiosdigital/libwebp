@@ -1,4 +1,4 @@
-AC_INIT([libwebp], [1.5.0],
+AC_INIT([libwebp], [1.6.0],
         [https://issues.webmproject.org],,
         [https://developers.google.com/speed/webp])
 AC_CANONICAL_HOST
@@ -114,6 +114,7 @@ TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wmissing-declarations])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wmissing-prototypes])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wold-style-definition])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wparentheses-equality])
+TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wself-assign])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wshadow])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wshorten-64-to-32])
 TEST_AND_ADD_CFLAGS([AM_CFLAGS], [-Wstrict-prototypes])

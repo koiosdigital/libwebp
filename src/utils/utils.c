@@ -13,11 +13,16 @@
 
 #include "src/utils/utils.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>  // for memcpy()
 
+#include "src/utils/bounds_safety.h"
 #include "src/utils/palette.h"
 #include "src/webp/encode.h"
+#include "src/webp/types.h"
+
+WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
 
 #include "esp_heap_caps.h"
 
@@ -58,7 +63,7 @@
 static int num_malloc_calls = 0;
 static int num_calloc_calls = 0;
 static int num_free_calls = 0;
-static int countdown_to_fail = 0;     // 0 = off
+static int countdown_to_fail = 0;  // 0 = off
 
 typedef struct MemBlock MemBlock;
 struct MemBlock {
@@ -155,8 +160,8 @@ static void SubMem(void* ptr) {
       *b = block->next;
       total_mem -= block->size;
 #if defined(PRINT_MEM_TRAFFIC)
-      fprintf(stderr, "Mem: %u (-%u)\n",
-              (uint32_t)total_mem, (uint32_t)block->size);
+      fprintf(stderr, "Mem: %u (-%u)\n", (uint32_t)total_mem,
+              (uint32_t)block->size);
 #endif
       free(block);
     }
@@ -164,9 +169,15 @@ static void SubMem(void* ptr) {
 }
 
 #else
-#define Increment(v) do {} while (0)
-#define AddMem(p, s) do {} while (0)
-#define SubMem(p)    do {} while (0)
+#define Increment(v) \
+  do {               \
+  } while (0)
+#define AddMem(p, s) \
+  do {               \
+  } while (0)
+#define SubMem(p) \
+  do {            \
+  } while (0)
 #endif
 
 // Returns 0 in case of overflow of nmemb * size.
@@ -177,15 +188,14 @@ static int CheckSizeArgumentsOverflow(uint64_t nmemb, size_t size) {
   if (!CheckSizeOverflow(total_size)) return 0;
 #if defined(PRINT_MEM_INFO) && defined(MALLOC_FAIL_AT)
   if (countdown_to_fail > 0 && --countdown_to_fail == 0) {
-    return 0;    // fake fail!
+    return 0;  // fake fail!
   }
 #endif
 #if defined(PRINT_MEM_INFO) && defined(MALLOC_LIMIT)
   if (mem_limit > 0) {
     const uint64_t new_total_mem = (uint64_t)total_mem + total_size;
-    if (!CheckSizeOverflow(new_total_mem) ||
-        new_total_mem > mem_limit) {
-      return 0;   // fake fail!
+    if (!CheckSizeOverflow(new_total_mem) || new_total_mem > mem_limit) {
+      return 0;  // fake fail!
     }
   }
 #endif
@@ -193,24 +203,26 @@ static int CheckSizeArgumentsOverflow(uint64_t nmemb, size_t size) {
   return 1;
 }
 
-void* WebPSafeMalloc(uint64_t nmemb, size_t size) {
+void* WEBP_SIZED_BY_OR_NULL(nmemb* size)
+    WebPSafeMalloc(uint64_t nmemb, size_t size) {
   void* ptr;
   Increment(&num_malloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
   ptr = heap_caps_malloc((size_t)(nmemb * size), MALLOC_CAP_SPIRAM);
   AddMem(ptr, (size_t)(nmemb * size));
-  return ptr;
+  return WEBP_UNSAFE_FORGE_BIDI_INDEXABLE(void*, ptr, (size_t)(nmemb * size));
 }
 
-void* WebPSafeCalloc(uint64_t nmemb, size_t size) {
+void* WEBP_SIZED_BY_OR_NULL(nmemb* size)
+    WebPSafeCalloc(uint64_t nmemb, size_t size) {
   void* ptr;
   Increment(&num_calloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
   ptr = heap_caps_calloc((size_t)nmemb, size, MALLOC_CAP_SPIRAM);
   AddMem(ptr, (size_t)(nmemb * size));
-  return ptr;
+  return WEBP_UNSAFE_FORGE_BIDI_INDEXABLE(void*, ptr, (size_t)(nmemb * size));
 }
 
 void WebPSafeFree(void* const ptr) {
@@ -223,22 +235,30 @@ void WebPSafeFree(void* const ptr) {
 
 // Public API functions.
 
-void* WebPMalloc(size_t size) {
-  return WebPSafeMalloc(1, size);
+void* WEBP_SINGLE WebPMalloc(size_t size) {
+  // Currently WebPMalloc/WebPFree are declared in src/webp/types.h, which does
+  // not include bounds_safety.h. As such, the "default" annotation for the
+  // pointers they accept/return is __single.
+  //
+  // All callers will need to immediately cast the returned pointer to
+  // WEBP_BIDI_INDEXABLE or WEBP_INDEXABLE via
+  // WEBP_UNSAFE_FORGE_BIDI_INDEXABLE.
+  //
+  // TODO: https://issues.webmproject.org/432511225 - Remove this once we can
+  // annotate WebPMalloc/WebPFree.
+  return WEBP_UNSAFE_FORGE_SINGLE(void*, WebPSafeMalloc(1, size));
 }
 
-void WebPFree(void* ptr) {
-  WebPSafeFree(ptr);
-}
+void WebPFree(void* WEBP_SINGLE ptr) { WebPSafeFree(ptr); }
 
 //------------------------------------------------------------------------------
 
-void WebPCopyPlane(const uint8_t* src, int src_stride,
-                   uint8_t* dst, int dst_stride, int width, int height) {
+void WebPCopyPlane(const uint8_t* src, int src_stride, uint8_t* dst,
+                   int dst_stride, int width, int height) {
   assert(src != NULL && dst != NULL);
   assert(abs(src_stride) >= width && abs(dst_stride) >= width);
   while (height-- > 0) {
-    memcpy(dst, src, width);
+    WEBP_UNSAFE_MEMCPY(dst, src, width);
     src += src_stride;
     dst += dst_stride;
   }
@@ -254,31 +274,27 @@ void WebPCopyPixels(const WebPPicture* const src, WebPPicture* const dst) {
 
 //------------------------------------------------------------------------------
 
-int WebPGetColorPalette(const WebPPicture* const pic, uint32_t* const palette) {
+int WebPGetColorPalette(
+    const WebPPicture* const pic,
+    uint32_t* const WEBP_COUNTED_BY_OR_NULL(MAX_PALETTE_SIZE) palette) {
   return GetColorPalette(pic, palette);
 }
 
 //------------------------------------------------------------------------------
 
 #if defined(WEBP_NEED_LOG_TABLE_8BIT)
-const uint8_t WebPLogTable8bit[256] = {   // 31 ^ clz(i)
-  0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
-};
+const uint8_t WebPLogTable8bit[256] = {  // 31 ^ clz(i)
+    0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
 #endif
 
 //------------------------------------------------------------------------------

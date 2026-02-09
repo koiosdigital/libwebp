@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 
 #include "./fuzz_utils.h"
@@ -23,7 +24,7 @@
 #include "src/utils/bit_reader_utils.h"
 #include "src/utils/huffman_utils.h"
 #include "src/utils/utils.h"
-#include "src/webp/format_constants.h"
+#include "webp/format_constants.h"
 
 namespace {
 

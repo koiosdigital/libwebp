@@ -17,8 +17,9 @@
 #include <cstdint>
 #include <string_view>
 
-#include "src/webp/mux_types.h"
+#include "./nalloc.h"
 #include "tests/fuzzer/fuzz_utils.h"
+#include "webp/mux_types.h"
 
 // Don't do that at home!
 #define main exec_main
@@ -26,18 +27,20 @@
 #undef main
 
 void WebPInfoTest(std::string_view data) {
+  nalloc_init(nullptr);
+  nalloc_start(reinterpret_cast<const uint8_t*>(data.data()), data.size());
   WebPInfo webp_info;
   WebPInfoInit(&webp_info);
   webp_info.quiet = 1;
   webp_info.show_summary = 0;
   webp_info.show_diagnosis = 0;
   webp_info.parse_bitstream = 1;
-  WebPData webp_data = {reinterpret_cast<const uint8_t *>(data.data()),
+  WebPData webp_data = {reinterpret_cast<const uint8_t*>(data.data()),
                         data.size()};
   AnalyzeWebP(&webp_info, &webp_data);
+  nalloc_end();
 }
 
 FUZZ_TEST(WebPInfo, WebPInfoTest)
-    .WithDomains(
-        fuzztest::String()
-            .WithMaxSize(fuzz_utils::kMaxWebPFileSize + 1));
+    .WithDomains(fuzztest::String().WithMaxSize(fuzz_utils::kMaxWebPFileSize +
+                                                1));

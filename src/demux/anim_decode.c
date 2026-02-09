@@ -20,7 +20,11 @@
 #include "src/utils/utils.h"
 #include "src/webp/decode.h"
 #include "src/webp/demux.h"
+#include "src/webp/mux.h"
+#include "src/webp/mux_types.h"
 #include "src/webp/types.h"
+
+WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
 
 #define NUM_CHANNELS 4
 
@@ -39,19 +43,19 @@ static void BlendPixelRowPremult(uint32_t* const src, const uint32_t* const dst,
                                  int num_pixels);
 
 struct WebPAnimDecoder {
-  WebPDemuxer* demux;              // Demuxer created from given WebP bitstream.
-  WebPDecoderConfig config;        // Decoder config.
+  WebPDemuxer* demux;        // Demuxer created from given WebP bitstream.
+  WebPDecoderConfig config;  // Decoder config.
   // Note: we use a pointer to a function blending multiple pixels at a time to
   // allow possible inlining of per-pixel blending function.
-  BlendRowFunc blend_func;         // Pointer to the chose blend row function.
-  WebPAnimInfo info;               // Global info about the animation.
-  uint8_t* curr_frame;             // Current canvas (not disposed).
-  uint8_t* prev_frame_disposed;    // Previous canvas (properly disposed).
-  int prev_frame_timestamp;        // Previous frame timestamp (milliseconds).
-  WebPIterator prev_iter;          // Iterator object for previous frame.
-  int prev_frame_was_keyframe;     // True if previous frame was a keyframe.
-  int next_frame;                  // Index of the next frame to be decoded
-                                   // (starting from 1).
+  BlendRowFunc blend_func;       // Pointer to the chose blend row function.
+  WebPAnimInfo info;             // Global info about the animation.
+  uint8_t* curr_frame;           // Current canvas (not disposed).
+  uint8_t* prev_frame_disposed;  // Previous canvas (properly disposed).
+  int prev_frame_timestamp;      // Previous frame timestamp (milliseconds).
+  WebPIterator prev_iter;        // Iterator object for previous frame.
+  int prev_frame_was_keyframe;   // True if previous frame was a keyframe.
+  int next_frame;                // Index of the next frame to be decoded
+                                 // (starting from 1).
 };
 
 static void DefaultDecoderOptions(WebPAnimDecoderOptions* const dec_options) {
@@ -77,8 +81,8 @@ WEBP_NODISCARD static int ApplyDecoderOptions(
   assert(dec_options != NULL);
 
   mode = dec_options->color_mode;
-  if (mode != MODE_RGBA && mode != MODE_BGRA &&
-      mode != MODE_rgbA && mode != MODE_bgrA) {
+  if (mode != MODE_RGBA && mode != MODE_BGRA && mode != MODE_rgbA &&
+      mode != MODE_bgrA) {
     return 0;
   }
   dec->blend_func = (mode == MODE_RGBA || mode == MODE_BGRA)
@@ -143,7 +147,7 @@ WebPAnimDecoder* WebPAnimDecoderNewInternal(
   WebPAnimDecoderReset(dec);
   return dec;
 
- Error:
+Error:
   WebPAnimDecoderDelete(dec);
   return NULL;
 }
@@ -166,7 +170,7 @@ WEBP_NODISCARD static int ZeroFillCanvas(uint8_t* buf, uint32_t canvas_width,
   const uint64_t size =
       (uint64_t)canvas_width * canvas_height * NUM_CHANNELS * sizeof(*buf);
   if (!CheckSizeOverflow(size)) return 0;
-  memset(buf, 0, (size_t)size);
+  WEBP_UNSAFE_MEMSET(buf, 0, (size_t)size);
   return 1;
 }
 
@@ -174,10 +178,12 @@ WEBP_NODISCARD static int ZeroFillCanvas(uint8_t* buf, uint32_t canvas_width,
 static void ZeroFillFrameRect(uint8_t* buf, int buf_stride, int x_offset,
                               int y_offset, int width, int height) {
   int j;
+  const uint32_t x = (uint32_t)x_offset * NUM_CHANNELS;  // 26 bits
+  const uint64_t y = (uint64_t)y_offset * buf_stride;
   assert(width * NUM_CHANNELS <= buf_stride);
-  buf += y_offset * buf_stride + x_offset * NUM_CHANNELS;
+  buf += y + x;
   for (j = 0; j < height; ++j) {
-    memset(buf, 0, width * NUM_CHANNELS);
+    WEBP_UNSAFE_MEMSET(buf, 0, width * NUM_CHANNELS);
     buf += buf_stride;
   }
 }
@@ -188,20 +194,20 @@ WEBP_NODISCARD static int CopyCanvas(const uint8_t* src, uint8_t* dst,
   const uint64_t size = (uint64_t)width * height * NUM_CHANNELS;
   if (!CheckSizeOverflow(size)) return 0;
   assert(src != NULL && dst != NULL);
-  memcpy(dst, src, (size_t)size);
+  WEBP_UNSAFE_MEMCPY(dst, src, (size_t)size);
   return 1;
 }
 
 // Returns true if the current frame is a key-frame.
 static int IsKeyFrame(const WebPIterator* const curr,
                       const WebPIterator* const prev,
-                      int prev_frame_was_key_frame,
-                      int canvas_width, int canvas_height) {
+                      int prev_frame_was_key_frame, int canvas_width,
+                      int canvas_height) {
   if (curr->frame_num == 1) {
     return 1;
   } else if ((!curr->has_alpha || curr->blend_method == WEBP_MUX_NO_BLEND) &&
-             IsFullFrame(curr->width, curr->height,
-                         canvas_width, canvas_height)) {
+             IsFullFrame(curr->width, curr->height, canvas_width,
+                         canvas_height)) {
     return 1;
   } else {
     return (prev->dispose_method == WEBP_MUX_DISPOSE_BACKGROUND) &&
@@ -211,12 +217,11 @@ static int IsKeyFrame(const WebPIterator* const curr,
   }
 }
 
-
 // Blend a single channel of 'src' over 'dst', given their alpha channel values.
 // 'src' and 'dst' are assumed to be NOT pre-multiplied by alpha.
-static uint8_t BlendChannelNonPremult(uint32_t src, uint8_t src_a,
-                                      uint32_t dst, uint8_t dst_a,
-                                      uint32_t scale, int shift) {
+static uint8_t BlendChannelNonPremult(uint32_t src, uint8_t src_a, uint32_t dst,
+                                      uint8_t dst_a, uint32_t scale,
+                                      int shift) {
   const uint8_t src_channel = (src >> shift) & 0xff;
   const uint8_t dst_channel = (dst >> shift) & 0xff;
   const uint32_t blend_unscaled = src_channel * src_a + dst_channel * dst_a;
@@ -326,8 +331,8 @@ static void FindBlendRangeAtRow(const WebPIterator* const src,
   }
 }
 
-int WebPAnimDecoderGetNext(WebPAnimDecoder* dec,
-                           uint8_t** buf_ptr, int* timestamp_ptr) {
+int WebPAnimDecoderGetNext(WebPAnimDecoder* dec, uint8_t** buf_ptr,
+                           int* timestamp_ptr) {
   WebPIterator iter;
   uint32_t width;
   uint32_t height;
@@ -356,8 +361,7 @@ int WebPAnimDecoderGetNext(WebPAnimDecoder* dec,
       goto Error;
     }
   } else {
-    if (!CopyCanvas(dec->prev_frame_disposed, dec->curr_frame,
-                    width, height)) {
+    if (!CopyCanvas(dec->prev_frame_disposed, dec->curr_frame, width, height)) {
       goto Error;
     }
   }
@@ -392,8 +396,7 @@ int WebPAnimDecoderGetNext(WebPAnimDecoder* dec,
       int y;
       // Blend transparent pixels with pixels in previous canvas.
       for (y = 0; y < iter.height; ++y) {
-        const size_t offset =
-            (iter.y_offset + y) * width + iter.x_offset;
+        const size_t offset = (iter.y_offset + y) * width + iter.x_offset;
         blend_row((uint32_t*)dec->curr_frame + offset,
                   (uint32_t*)dec->prev_frame_disposed + offset, iter.width);
       }
@@ -443,7 +446,7 @@ int WebPAnimDecoderGetNext(WebPAnimDecoder* dec,
   *timestamp_ptr = timestamp;
   return 1;
 
- Error:
+Error:
   WebPDemuxReleaseIterator(&iter);
   return 0;
 }
@@ -457,7 +460,7 @@ void WebPAnimDecoderReset(WebPAnimDecoder* dec) {
   if (dec != NULL) {
     dec->prev_frame_timestamp = 0;
     WebPDemuxReleaseIterator(&dec->prev_iter);
-    memset(&dec->prev_iter, 0, sizeof(dec->prev_iter));
+    WEBP_UNSAFE_MEMSET(&dec->prev_iter, 0, sizeof(dec->prev_iter));
     dec->prev_frame_was_keyframe = 0;
     dec->next_frame = 1;
   }

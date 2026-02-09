@@ -40,7 +40,7 @@
 set -eu
 
 EXTRA_CMAKE_FLAGS=""
-export CXXFLAGS="${CXXFLAGS} -DFUZZTEST_COMPATIBILITY_MODE"
+export CXXFLAGS="${CXXFLAGS} -DFUZZTEST_COMPATIBILITY_MODE -DWEBP_FUZZER_ENABLE_NALLOC"
 EXTRA_CMAKE_FLAGS="-DFUZZTEST_COMPATIBILITY_MODE=libfuzzer"
 
 # limit allocation size to reduce spurious OOMs
@@ -70,15 +70,21 @@ for fuzz_main_file in $FUZZ_TEST_BINARIES_OUT_PATHS; do
     TARGET_FUZZER="${fuzz_basename}@$fuzz_entrypoint"
     # Write executer script
     cat << EOF > $OUT/$TARGET_FUZZER
-#!/bin/sh
+#!/bin/bash
 # LLVMFuzzerTestOneInput for fuzzer detection.
 this_dir=\$(dirname "\$0")
 export TEST_DATA_DIRS=\$this_dir/corpus
+export ASAN_OPTIONS="\${ASAN_OPTIONS}:allocator_may_return_null=1"
 chmod +x \$this_dir/$fuzz_basename
 \$this_dir/$fuzz_basename --fuzz=$fuzz_entrypoint -- \$@
 chmod -x \$this_dir/$fuzz_basename
 EOF
     chmod +x $OUT/$TARGET_FUZZER
+    if grep -q "nalloc_init" $fuzz_main_file; then
+      cp $OUT/$TARGET_FUZZER $OUT/${TARGET_FUZZER}_nalloc
+      sed -i -e 's/^\$this_dir/NALLOC_FREQ=32 \$this_dir/' \
+        $OUT/${TARGET_FUZZER}_nalloc
+    fi
   done
   # Copy data.
   cp fuzz_seed_corpus.zip $OUT/${fuzz_basename}_seed_corpus.zip

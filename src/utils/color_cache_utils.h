@@ -17,8 +17,12 @@
 
 #include <assert.h>
 
+#include "src/dsp/cpu.h"
 #include "src/dsp/dsp.h"
+#include "src/utils/bounds_safety.h"
 #include "src/webp/types.h"
+
+WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,20 +30,20 @@ extern "C" {
 
 // Main color cache struct.
 typedef struct {
-  uint32_t* colors;  // color entries
-  int hash_shift;    // Hash shift: 32 - 'hash_bits'.
+  uint32_t* WEBP_COUNTED_BY_OR_NULL(1u << hash_bits) colors;  // color entries
+  int hash_shift;  // Hash shift: 32 - 'hash_bits'.
   int hash_bits;
 } VP8LColorCache;
 
 static const uint32_t kHashMul = 0x1e35a7bdu;
 
-static WEBP_UBSAN_IGNORE_UNSIGNED_OVERFLOW WEBP_INLINE
-int VP8LHashPix(uint32_t argb, int shift) {
+static WEBP_UBSAN_IGNORE_UNSIGNED_OVERFLOW WEBP_INLINE int VP8LHashPix(
+    uint32_t argb, int shift) {
   return (int)((argb * kHashMul) >> shift);
 }
 
-static WEBP_INLINE uint32_t VP8LColorCacheLookup(
-    const VP8LColorCache* const cc, uint32_t key) {
+static WEBP_INLINE uint32_t VP8LColorCacheLookup(const VP8LColorCache* const cc,
+                                                 uint32_t key) {
   assert((key >> cc->hash_bits) == 0u);
   return cc->colors[key];
 }
