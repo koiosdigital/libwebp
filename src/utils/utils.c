@@ -230,7 +230,7 @@ void WebPSafeFree(void* const ptr) {
     Increment(&num_free_calls);
     SubMem(ptr);
   }
-  free(ptr);
+  heap_caps_free(ptr);
 }
 
 // Public API functions.
