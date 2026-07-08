@@ -606,6 +606,7 @@ extern void VP8LDspInitAVX2(void);
 extern void VP8LDspInitNEON(void);
 extern void VP8LDspInitMIPSdspR2(void);
 extern void VP8LDspInitMSA(void);
+extern void VP8LDspInitXtensa(void);
 
 #define COPY_PREDICTOR_ARRAY(IN, OUT)                       \
   do {                                                      \
@@ -682,6 +683,10 @@ WEBP_DSP_INIT_FUNC(VP8LDspInit) {
       (VP8GetCPUInfo != NULL && VP8GetCPUInfo(kNEON))) {
     VP8LDspInitNEON();
   }
+#endif
+
+#if defined(WEBP_USE_XTENSA_PIE)
+  VP8LDspInitXtensa();
 #endif
 
   assert(VP8LAddGreenToBlueAndRed != NULL);

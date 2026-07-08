@@ -146,6 +146,57 @@
         : : \
     )
 
+// Broadcast 32-bit value to all 4 lanes of Q register
+#define PIE_VLDBC_32(qreg, ptr) \
+    __asm__ volatile ( \
+        "ee.vldbc.32 " #qreg ", %0" \
+        : \
+        : "a"(ptr) \
+        : "memory" \
+    )
+
+// Bitwise AND: dst = a & b
+#define PIE_ANDQ(dst, a, b) \
+    __asm__ volatile ( \
+        "ee.andq " #dst ", " #a ", " #b \
+        : : : \
+    )
+
+// Bitwise OR: dst = a | b
+#define PIE_ORQ(dst, a, b) \
+    __asm__ volatile ( \
+        "ee.orq " #dst ", " #a ", " #b \
+        : : : \
+    )
+
+// Bitwise XOR: dst = a ^ b
+#define PIE_XORQ(dst, a, b) \
+    __asm__ volatile ( \
+        "ee.xorq " #dst ", " #a ", " #b \
+        : : : \
+    )
+
+// Set the SAR register (shift amount for EE.VSL.32 / EE.VSR.32)
+#define PIE_SET_SAR(amount) \
+    do { \
+        const uint32_t _pie_sar = (amount); \
+        __asm__ volatile ("wsr %0, sar" : : "a"(_pie_sar)); \
+    } while (0)
+
+// Shift left each 32-bit lane by SAR: dst = src << SAR
+#define PIE_VSL_32(dst, src) \
+    __asm__ volatile ( \
+        "ee.vsl.32 " #dst ", " #src \
+        : : : \
+    )
+
+// Shift right each 32-bit lane by SAR: dst = src >> SAR
+#define PIE_VSR_32(dst, src) \
+    __asm__ volatile ( \
+        "ee.vsr.32 " #dst ", " #src \
+        : : : \
+    )
+
 //------------------------------------------------------------------------------
 // Clipping/saturation helpers
 
